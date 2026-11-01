@@ -308,40 +308,64 @@
     return km;
   }
 
-  // 4 groups of 3 nearby HealthHub branches (W1 Thu, W1 Fri, W2 Thu, W2 Fri), covering every branch.
-  function groupHealthHub(hh, warnings) {
+  // Choose the 4 HealthHub triples (W1 Thu, W1 Fri, W2 Thu, W2 Fri): every triple must be tight
+  // (all 3 branches within maxSpan km of each other); among those, cover as many branches as possible.
+  function groupHealthHub(hh, warnings, maxSpan) {
     var groups = [];
     if (!hh.length) {
       warnings.push('مفيش فروع HealthHub متاحة — الخميس والجمعة هيبقوا أيام عادية.');
       return groups;
     }
-    if (hh.length < 3) warnings.push('فروع HealthHub أقل من 3 — الخميس/الجمعة مش هيوصلوا 9 حسابات HealthHub.');
-    var uncovered = hh.slice();
-    var size = Math.min(3, hh.length);
-    function nearest(seed, pool, n) {
-      return pool.filter(function (x) { return x !== seed; })
-        .sort(function (a, b) { return dist(seed.p, a.p) - dist(seed.p, b.p); }).slice(0, n);
+    if (hh.length < 3) {
+      warnings.push('فروع HealthHub أقل من 3 — الخميس/الجمعة مش هيوصلوا 9 حسابات HealthHub.');
+      for (var q = 0; q < 4; q++) groups.push(hh.slice());
+      return groups;
     }
-    var distinct = [];
-    while (uncovered.length && distinct.length < 4) {
-      var c = centroid(uncovered.map(function (x) { return x.p; }));
-      var seed = uncovered.reduce(function (a, b) { return dist(b.p, c) > dist(a.p, c) ? b : a; });
-      var g = [seed].concat(nearest(seed, uncovered, size - 1));
-      if (g.length < size) {
-        var others = hh.filter(function (x) { return g.indexOf(x) < 0; });
-        g = g.concat(nearest(seed, others, size - g.length));
+    var span = function (g) {
+      var m = 0;
+      for (var a = 0; a < g.length; a++) for (var b = a + 1; b < g.length; b++) m = Math.max(m, dist(g[a].p, g[b].p));
+      return m;
+    };
+    var triples = [];
+    for (var i = 0; i < hh.length; i++) for (var j = i + 1; j < hh.length; j++) for (var k = j + 1; k < hh.length; k++) {
+      var t = [hh[i], hh[j], hh[k]];
+      triples.push({ g: t, s: span(t) });
+    }
+    var limit = maxSpan;
+    var ok = triples.filter(function (t) { return t.s <= limit; });
+    while (ok.length < 2 && limit < 60) { limit += 2; ok = triples.filter(function (t) { return t.s <= limit; }); }
+    ok.sort(function (a, b) { return a.s - b.s; });
+    // Best set of 4 triples: max distinct branches, then min total span (bounded search).
+    var best = null;
+    function score(sel) {
+      var seen = {}, n = 0, tot = 0;
+      sel.forEach(function (t) { tot += t.s; t.g.forEach(function (x) { if (!seen[x.a.id]) { seen[x.a.id] = 1; n++; } }); });
+      return { n: n, tot: tot };
+    }
+    var cand = ok.slice(0, 80);
+    (function search(start, sel) {
+      if (sel.length === 4 || start >= cand.length) {
+        if (!sel.length) return;
+        var full = sel.slice();
+        while (full.length < 4) full.push(full[full.length % sel.length]);
+        var sc = score(full);
+        if (!best || sc.n > best.n || (sc.n === best.n && sc.tot < best.tot)) best = { sel: full, n: sc.n, tot: sc.tot };
+        return;
       }
-      g.forEach(function (x) { var i = uncovered.indexOf(x); if (i >= 0) uncovered.splice(i, 1); });
-      distinct.push(g);
+      for (var c = start; c < cand.length; c++) {
+        sel.push(cand[c]); search(c + 1, sel); sel.pop();
+        if (sel.length === 0 && c > 40) break;
+      }
+    })(0, []);
+    groups = best.sel.map(function (t) { return t.g; });
+    var covered = {};
+    groups.forEach(function (g) { g.forEach(function (x) { covered[x.a.id] = 1; }); });
+    var missing = hh.filter(function (x) { return !covered[x.a.id]; });
+    if (missing.length) {
+      warnings.push('عشان كل خميس/جمعة يبقى فيه 3 فروع HealthHub قريبين (في حدود ' + Math.round(limit) + ' كم من بعض)، الفروع دي مادخلتش الأسبوعين دول: ' +
+        missing.map(function (x) { return x.a.name; }).join('، ') + ' — حطّهم في الدورة الجاية.');
     }
-    if (uncovered.length) {
-      warnings.push('فروع HealthHub أكتر من 12 — دول مش هيلحقوا في الأسبوعين: ' +
-        uncovered.map(function (x) { return x.a.name; }).join('، '));
-    }
-    // Make the remaining Thu/Fri slots by re-visiting the tightest groups.
-    var spread = function (g) { var c = centroid(g.map(function (x) { return x.p; })); return g.reduce(function (s, x) { return s + dist(x.p, c); }, 0); };
-    var ranked = distinct.slice().sort(function (a, b) { return spread(a) - spread(b); });
-    for (var i = 0; i < 4; i++) groups.push(i < distinct.length ? distinct[i] : ranked[(i - distinct.length) % ranked.length]);
+    // Pair groups so each week has two different regions where possible.
     return groups;
   }
 
@@ -391,9 +415,9 @@
       }
     }
 
-    var groups = groupHealthHub(by.HealthHub, warnings);
-    var hhDays = days.filter(function (dd) { return dd.dow >= 3; });
-    hhDays.forEach(function (dd, i) {
+    var R = opts.radiusKm || 5;
+    var groups = groupHealthHub(by.HealthHub, warnings, opts.hhSpanKm || 9);
+    days.filter(function (dd) { return dd.dow >= 3; }).forEach(function (dd, i) {
       var g = groups[i];
       if (!g) return;
       dd.hh = g;
@@ -401,102 +425,127 @@
       dd.center = dd.anchor;
       dd.cap = DAILY_TARGET - g.reduce(function (s, x) { return s + x.w; }, 0);
     });
+    days.forEach(function (dd) { dd.items = []; dd.load = 0; });
 
-    // Tasks: every Nahdi once per week; Medon / Med7 once in the plan.
-    var tasks = [];
-    by.Nahdi.forEach(function (x) { tasks.push({ x: x, week: 1 }); tasks.push({ x: x, week: 2 }); });
-    by.Medon.concat(by.Med7).forEach(function (x) { tasks.push({ x: x, week: null }); });
+    var nahdi = by.Nahdi, once = by.Medon.concat(by.Med7);
+    var onceDone = {};
+    var inDay = function (dd, x) { return dd.items.some(function (it) { return it.x === x; }); };
+    var near = function (x, c, r) { return dist(x.p, c) <= r; };
+    var corePts = function (dd) {
+      var pts = dd.items.filter(function (it) { return !it.extra && it.x.a.chain !== 'Aster'; }).map(function (it) { return it.x.p; })
+        .concat(dd.hh.map(function (x) { return x.p; }));
+      return pts.length ? pts : [dd.center];
+    };
+    var coreDist = function (x, dd) { return Math.min.apply(null, corePts(dd).map(function (p) { return dist(x.p, p); })); };
 
-    // Seed free-day centres by farthest-point sampling, per week.
-    var allPts = valid.filter(function (x) { return x.a.chain !== 'Aster' && x.a.chain !== 'HealthHub'; }).map(function (x) { return x.p; });
     [1, 2].forEach(function (wk) {
       var wd = days.filter(function (dd) { return dd.week === wk; });
-      var centers = wd.filter(function (dd) { return dd.center; }).map(function (dd) { return dd.center; });
-      wd.forEach(function (dd) {
-        if (dd.center) return;
-        var best = null, bestD = -1;
-        allPts.forEach(function (p) {
-          var m = centers.length ? Math.min.apply(null, centers.map(function (c) { return dist(p, c); })) : dist(p, DUBAI_CENTER);
-          if (m > bestD) { bestD = m; best = p; }
-        });
-        dd.center = best || DUBAI_CENTER;
-        centers.push(dd.center);
-      });
-    });
-
-    function assign(list, loads, out) {
-      var remaining = list.slice(), left = [];
-      while (remaining.length) {
-        var pick = -1, pickDay = null, pickScore = -Infinity;
-        for (var i = 0; i < remaining.length; i++) {
-          var t = remaining[i], b1 = Infinity, b2 = Infinity, bd = null;
-          for (var k = 0; k < days.length; k++) {
-            var dd = days[k];
-            if (t.week && dd.week !== t.week) continue;
-            if (loads[k] + t.x.w > dd.cap) continue;
-            var c = dist(t.x.p, dd.center);
-            if (c < b1) { b2 = b1; b1 = c; bd = k; } else if (c < b2) b2 = c;
-          }
-          if (bd === null) continue;
-          var score = (b2 === Infinity ? 1000 : b2 - b1) + t.x.pr * 0.01;
-          if (score > pickScore) { pickScore = score; pick = i; pickDay = bd; }
-        }
-        if (pick < 0) { left = left.concat(remaining); break; }
-        var task = remaining.splice(pick, 1)[0];
-        loads[pickDay] += task.x.w;
-        out[pickDay].push(task);
+      var placed = {};
+      // Free days (no HealthHub): pick a centre that covers the most still-unplaced work inside R.
+      // Nahdi left for this week weighs most; Medon/Med7 not yet visited weigh less.
+      var anchored = wd.filter(function (dd) { return dd.anchor; });
+      var free = wd.filter(function (dd) { return !dd.anchor; });
+      var need = function () {
+        return nahdi.filter(function (x) { return !placed[x.a.id]; }).map(function (x) { return { x: x, v: 10 }; })
+          .concat(once.filter(function (x) { return !onceDone[x.a.id]; }).map(function (x) { return { x: x, v: wk === 2 ? 6 : 3 }; }));
+      };
+      // Anchored days take the nearby must-visit accounts first.
+      function fillDay(dd, list) {
+        list.slice().sort(function (a, b) { return (b.v - a.v) || (dist(a.x.p, dd.center) - dist(b.x.p, dd.center)); })
+          .forEach(function (n) {
+            if (dd.load + n.x.w > dd.cap || !near(n.x, dd.center, R) || inDay(dd, n.x)) return;
+            if (n.x.a.chain === 'Nahdi') { if (placed[n.x.a.id]) return; placed[n.x.a.id] = 1; }
+            else { if (onceDone[n.x.a.id]) return; onceDone[n.x.a.id] = 1; }
+            dd.items.push({ x: n.x, extra: false }); dd.load += n.x.w;
+          });
       }
-      return left;
-    }
-
-    var out, loads, leftover;
-    for (var iter = 0; iter < 8; iter++) {
-      out = days.map(function () { return []; });
-      loads = days.map(function () { return 0; });
-      var nahdiLeft = assign(tasks.filter(function (t) { return t.week; }), loads, out);
-      var onceLeft = assign(tasks.filter(function (t) { return !t.week; }).sort(function (a, b) { return b.x.pr - a.x.pr; }), loads, out);
-      leftover = nahdiLeft.concat(onceLeft);
-      var moved = 0;
-      days.forEach(function (dd, k) {
-        if (dd.anchor || !out[k].length) return;
-        var c = centroid(out[k].map(function (t) { return t.x.p; }));
-        moved += dist(c, dd.center);
-        dd.center = c;
+      anchored.forEach(function (dd) { fillDay(dd, need()); });
+      // Remaining Nahdi of this week: split into one tight cluster per free day (k-means).
+      var rest = nahdi.filter(function (x) { return !placed[x.a.id]; });
+      if (free.length) {
+        var cs = [];
+        if (rest.length) {
+          var c0 = centroid(rest.map(function (x) { return x.p; }));
+          cs.push(rest.reduce(function (a, b) { return dist(b.p, c0) > dist(a.p, c0) ? b : a; }).p);
+          while (cs.length < Math.min(free.length, rest.length)) {
+            cs.push(rest.reduce(function (a, b) {
+              var da = Math.min.apply(null, cs.map(function (c) { return dist(a.p, c); }));
+              var db = Math.min.apply(null, cs.map(function (c) { return dist(b.p, c); }));
+              return db > da ? b : a;
+            }).p);
+          }
+          for (var it = 0; it < 15; it++) {
+            var buckets = cs.map(function () { return []; });
+            rest.forEach(function (x) {
+              var bi = 0;
+              cs.forEach(function (c, ci) { if (dist(x.p, c) < dist(x.p, cs[bi])) bi = ci; });
+              buckets[bi].push(x);
+            });
+            cs = cs.map(function (c, ci) { return buckets[ci].length ? centroid(buckets[ci].map(function (x) { return x.p; })) : c; });
+          }
+        }
+        free.forEach(function (dd, fi) {
+          dd.center = cs[fi] || (anchored[0] ? anchored[0].center : DUBAI_CENTER);
+        });
+        rest.forEach(function (x) {
+          var dd = free.slice().sort(function (a, b) { return dist(x.p, a.center) - dist(x.p, b.center); })
+            .filter(function (d2) { return d2.load + x.w <= d2.cap; })[0];
+          if (!dd) return;
+          dd.items.push({ x: x, extra: false, core: true }); dd.load += x.w; placed[x.a.id] = 1;
+        });
+        // Medon / Med7 that sit inside a free day's area.
+        free.forEach(function (dd) { fillDay(dd, need().filter(function (n) { return n.x.a.chain !== 'Nahdi'; })); });
+      }
+      nahdi.forEach(function (x) {
+        if (placed[x.a.id]) return;
+        var opts2 = wd.filter(function (dd) { return dd.load + x.w <= dd.cap; })
+          .sort(function (a, b) { return coreDist(x, a) - coreDist(x, b); });
+        if (!opts2.length) { warnings.push('النهدي "' + x.a.name + '" ماتحطّش في الأسبوع ' + wk + ' — الأيام مليانة.'); return; }
+        var dd = opts2[0];
+        dd.items.push({ x: x, extra: false }); dd.load += x.w; placed[x.a.id] = 1;
       });
-      if (moved < 0.05) break;
-    }
-    days.forEach(function (dd, k) { dd.items = out[k].map(function (t) { return { x: t.x, extra: false }; }); dd.load = loads[k]; });
-    leftover.forEach(function (t) {
-      warnings.push((t.week ? 'النهدي ' : '') + '"' + t.x.a.name + '" ماتحطّش' + (t.week ? ' في الأسبوع ' + t.week : '') + ' — الأيام مليانة.');
+    });
+    // Medon / Med7 still not visited: the day (any week) whose stops are closest, if there is room.
+    once.forEach(function (x) {
+      if (onceDone[x.a.id]) return;
+      var cands = days.filter(function (dd) { return dd.load + x.w <= dd.cap; })
+        .sort(function (a, b) { return coreDist(x, a) - coreDist(x, b); });
+      if (!cands.length) { warnings.push('"' + x.a.name + '" ماتحطّش — الأيام مليانة.'); return; }
+      var dd = cands[0];
+      if (coreDist(x, dd) > R * 1.5) {
+        warnings.push('"' + x.a.name + '" (' + displayArea(x.a, x.p) + ') بعيد عن مناطق الأسبوعين — سيبته للدورة الجاية.');
+        return;
+      }
+      dd.items.push({ x: x, extra: false }); dd.load += x.w; onceDone[x.a.id] = 1;
     });
 
-    // Fill each day to 17: Aster first (on the route), then extra visits.
+    // Fill to 17 with Aster inside the day's area (closest to the centre first), then extra visits, then widen.
     days.forEach(function (dd) {
-      var pts = dd.items.map(function (it) { return it.x.p; }).concat(dd.hh.map(function (x) { return x.p; }));
       var inWeek = function (x) {
-        return days.some(function (o) {
-          return o.week === dd.week && (o.items.some(function (it) { return it.x === x; }) || o.hh.indexOf(x) >= 0);
-        });
+        return days.some(function (o) { return o.week === dd.week && (inDay(o, x) || o.hh.indexOf(x) >= 0); });
       };
-      var near = function (x) {
-        var m = pts.length ? Math.min.apply(null, pts.map(function (p) { return dist(x.p, p); })) : dist(x.p, dd.center);
-        return m - x.pr * 0.3 + (x.p.quality === 'exact' ? 0 : 0.5);
-      };
+      var core = corePts(dd);
+      var cd = function (x) { return Math.min.apply(null, core.map(function (p) { return dist(x.p, p); })); };
+      var score = function (x) { return cd(x) - x.pr * 0.4 + (x.p.quality === 'exact' ? 0 : 0.8); };
+      var radius = 2.5, widened = false;
       while (dd.load < dd.cap) {
         var room = dd.cap - dd.load;
-        var cands = by.Aster.filter(function (x) { return !inWeek(x); });
+        var pool = by.Aster.filter(function (x) { return !inWeek(x) && cd(x) <= radius; });
         var extra = false;
-        if (!cands.length) {
-          cands = by.Medon.concat(by.Med7).filter(function (x) { return x.w <= room && !inWeek(x); });
+        if (!pool.length) {
+          pool = once.concat(nahdi.filter(function () { return false; }))
+            .filter(function (x) { return x.w <= room && !inWeek(x) && cd(x) <= radius; });
           extra = true;
         }
-        if (!cands.length) break;
-        var best = cands.reduce(function (a, b) { return near(b) < near(a) ? b : a; });
-        dd.items.push({ x: best, extra: extra });
-        dd.load += best.w;
-        pts.push(best.p);
+        if (!pool.length) {
+          if (radius >= R * 3) break;
+          radius += 1; if (radius > R) widened = true; continue;
+        }
+        var best = pool.reduce(function (a, b) { return score(b) < score(a) ? b : a; });
+        dd.items.push({ x: best, extra: extra }); dd.load += best.w;
       }
-      if (dd.load < dd.cap) warnings.push(dd.name + ' (أسبوع ' + dd.week + ') فيه ' + (dd.load + (DAILY_TARGET - dd.cap)) + ' حساب بس — مفيش حسابات كفاية.');
+      if (widened) warnings.push(dd.name + ' (أسبوع ' + dd.week + '): مفيش حسابات كفاية قريبة، فوسّعت المنطقة لحد ' + Math.round(radius) + ' كم.');
+      if (dd.load < dd.cap) warnings.push(dd.name + ' (أسبوع ' + dd.week + ') فيه ' + (dd.load + (DAILY_TARGET - dd.cap)) + ' حساب بس — مفيش حسابات كفاية في المنطقة.');
     });
 
     // Order the route and set time slots.
