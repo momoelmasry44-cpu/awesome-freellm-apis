@@ -143,6 +143,14 @@
     var n = nearestArea(loc);
     return n ? (loc.quality === 'exact' ? '' : '~') + n[1] : '';
   }
+  function areaEnglish(a, loc) {
+    var name = a.area || detectArea(a.name + ' ' + (a.address || ''));
+    if (name) return name;
+    loc = loc || locate(a);
+    if (loc.quality === 'none') return '';
+    var n = nearestArea(loc);
+    return n ? n[0] : '';
+  }
   function areaLabel(name) {
     var a = areaInfo(name);
     return a ? a[1] : (name || '');
@@ -601,7 +609,7 @@
         var a = it.x.a;
         stops.push({
           id: a.id, name: a.name, chain: a.chain, chainLabel: CHAINS[a.chain].label, type: a.type,
-          typeLabel: typeLabel(a), weight: it.x.w, area: displayArea(a, it.x.p),
+          typeLabel: typeLabel(a), weight: it.x.w, area: displayArea(a, it.x.p), areaEn: areaEnglish(a, it.x.p),
           slot: slot, kind: kind, extra: !!it.extra, lat: it.x.p.lat, lng: it.x.p.lng, quality: it.x.p.quality,
           url: a.url || ('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(a.name + ' Dubai'))
         });
@@ -726,6 +734,6 @@
     normalize: normalize, detectArea: detectArea, detectChain: detectChain, detectType: detectType,
     parseCoords: parseCoords, insideDubai: insideDubai, locate: locate, weightOf: weightOf,
     exclusionReason: exclusionReason, generate: generate, validate: validate, csv: csv,
-    routeLinks: routeLinks, sheetRows: sheetRows, areaLabel: areaLabel, displayArea: displayArea, typeLabel: typeLabel, dist: dist
+    routeLinks: routeLinks, sheetRows: sheetRows, areaLabel: areaLabel, displayArea: displayArea, areaEnglish: areaEnglish, typeLabel: typeLabel, dist: dist
   };
 });

@@ -56,6 +56,25 @@
     <div id="accList"></div>
   </section>
 
+  <!-- DAILY REPORT -->
+  <section id="tab-report" class="tab">
+    <div class="card">
+      <div class="row">
+        <label class="grow">تاريخ التقرير <input type="date" id="dsrDate"></label>
+        <span id="dsrCount" class="muted small"></span>
+      </div>
+      <div class="btns">
+        <button id="btnDsrFromPlan">🗓️ زيارات اليوم من الخطة</button>
+        <button id="btnDsrExport" class="primary">📊 طلّع DSR Excel</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="dsrNew" class="grow" list="dsrAccounts" placeholder="زيارة مش في الخطة (اسم الحساب)">
+        <button id="btnDsrAdd">＋ زيارة</button>
+      </div>
+    </div>
+    <div id="dsrList"></div>
+  </section>
+
   <!-- MORE -->
   <section id="tab-more" class="tab">
     <div class="card">
@@ -71,6 +90,18 @@
       </ul>
     </div>
     <div class="card">
+      <h2>بيانات التقرير (DSR)</h2>
+      <div class="row">
+        <label class="grow">الاسم <input id="prof_name"></label>
+        <label class="grow">Country <input id="prof_country"></label>
+        <label class="grow">Location <input id="prof_location"></label>
+      </div>
+      <label>المنتجات (منتج في كل سطر)
+        <textarea id="productsText" rows="8" dir="ltr"></textarea>
+      </label>
+      <button id="btnSaveProducts">حفظ المنتجات</button>
+    </div>
+    <div class="card">
       <h2>البيانات</h2>
       <div class="btns">
         <button id="btnBackup">💾 نسخة احتياطية</button>
@@ -84,6 +115,7 @@
 
 <nav class="tabs">
   <button data-tab="plan" class="active"><span>🗓️</span>الخطة</button>
+  <button data-tab="report"><span>📝</span>التقرير</button>
   <button data-tab="accounts"><span>🏥</span>الحسابات</button>
   <button data-tab="more"><span>⚙️</span>المزيد</button>
 </nav>
@@ -152,11 +184,14 @@
 
 <input type="file" id="restoreFile" accept=".json,application/json" hidden>
 <datalist id="areaList"></datalist>
+<datalist id="dsrAccounts"></datalist>
+<datalist id="dsrSpecs"><option value="pharmacist"><option value="Doctor"><option value="GP"><option value="Pediatrician"><option value="Gynecologist"><option value="Internal medicine"><option value="ENT"><option value="Dermatologist"><option value="company"></datalist>
 <div id="toast"></div>
 
 <script src="seed.js"></script>
 <script src="planner.js"></script>
 <script src="xlsx.js"></script>
 <script src="app.js"></script>
+<script src="dsr.js"></script>
 </body>
 </html>

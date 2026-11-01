@@ -117,3 +117,19 @@ dialog form { padding: 16px; max-height: 85vh; overflow: auto; }
 #toast.show { opacity: .95; }
 .progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 6px; }
 .progress div { height: 100%; background: var(--primary); width: 0; transition: width .2s; }
+
+.visit { display: grid; gap: 8px; }
+.visit.filled { border-color: var(--primary); }
+.vhead { display: flex; gap: 6px; align-items: center; }
+.vhead input { margin: 0; font-weight: 600; }
+.vnum { min-width: 26px; height: 26px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center; font-size: 13px; }
+.visit.filled .vnum { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.icon { padding: 6px 9px; font-size: 13px; }
+.vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+.vgrid label { margin-bottom: 4px; }
+.pchips { display: flex; flex-wrap: wrap; gap: 6px; direction: ltr; justify-content: flex-end; }
+.pchip { font-size: 13px; padding: 5px 10px; border-radius: 999px; }
+.pchip.pI { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.pchip.pR { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+.pchip b { font-size: 11px; }
+.remarks { direction: ltr; text-align: left; font-size: 14px; background: var(--bg); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }

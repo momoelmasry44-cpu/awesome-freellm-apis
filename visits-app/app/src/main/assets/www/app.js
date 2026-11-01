@@ -38,6 +38,8 @@
     var el = document.createElement('a'); el.href = URL.createObjectURL(blob); el.download = name;
     document.body.appendChild(el); el.click(); el.remove();
   }
+  window.appToast = function (m) { toast(m); };
+  window.appSaveXlsx = function (n, s) { saveXlsx(n, s); };
   function uid() { return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function seedAccounts() {
     return (window.SEED_ACCOUNTS || []).map(function (a) { return Object.assign({ tier: 'B', otc: false }, a); });
@@ -116,6 +118,7 @@
     }).join('');
     $('#locStatus').textContent = 'المواقع: ' + exact + ' دقيق، ' + weak + ' تقريبي.' + (weak && !Bridge ? ' (تحديد المواقع بيشتغل من تطبيق الأندرويد)' : '');
     $('#topInfo').textContent = accounts.length + ' حساب';
+    if (window.refreshDsrAccounts) window.refreshDsrAccounts(accounts.filter(function (a) { return !P.exclusionReason(a, ctx); }).map(function (a) { return a.name; }));
   }
   $('#search').addEventListener('input', renderAccounts);
   $('#chainFilter').addEventListener('change', renderAccounts);
@@ -458,6 +461,6 @@
     }
   });
 
-  renderAccounts();
   renderPlan();
+  setTimeout(renderAccounts, 0);
 })();

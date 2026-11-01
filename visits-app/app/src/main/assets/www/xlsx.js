@@ -51,8 +51,11 @@
   function sheetXml(sh) {
     var rows = sh.rows.map(function (r, ri) {
       var st = sh.styles ? (sh.styles[ri] || 0) : (ri === 0 ? 1 : 0);
-      return '<row r="' + (ri + 1) + '">' + r.map(function (v, ci) {
-        var ref = col(ci) + (ri + 1), s = st ? ' s="' + st + '"' : '';
+      var ht = sh.heights && sh.heights[ri] ? ' ht="' + sh.heights[ri] + '" customHeight="1"' : '';
+      return '<row r="' + (ri + 1) + '"' + ht + '>' + r.map(function (v, ci) {
+        var ref = col(ci) + (ri + 1), cs = st;
+        if (v && typeof v === 'object') { cs = v.s != null ? v.s : st; v = v.v; }
+        var s = cs ? ' s="' + cs + '"' : '';
         if (v === null || v === undefined || v === '') return '<c r="' + ref + '"' + s + '/>';
         if (typeof v === 'number') return '<c r="' + ref + '"' + s + '><v>' + v + '</v></c>';
         return '<c r="' + ref + '"' + s + ' t="inlineStr"><is><t xml:space="preserve">' + esc(v) + '</t></is></c>';
@@ -60,7 +63,8 @@
     }).join('');
     var cols = (sh.widths || []).map(function (w, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('');
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-      '<sheetViews><sheetView workbookViewId="0" rightToLeft="1"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+      (sh.ltr ? '<sheetViews><sheetView workbookViewId="0"/></sheetViews>' :
+      '<sheetViews><sheetView workbookViewId="0" rightToLeft="1"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>') +
       (cols ? '<cols>' + cols + '</cols>' : '') + '<sheetData>' + rows + '</sheetData></worksheet>';
   }
   function build(sheets) {
@@ -77,17 +81,27 @@
       sheets.map(function (s, i) { return '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>'; }).join('') +
       '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
     var styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-      '<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+      '<numFmts count="1"><numFmt numFmtId="164" formatCode="mm\\-dd\\-yy"/></numFmts>' +
+      '<fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font>' +
+      '<font><sz val="11"/><name val="Arial"/></font><font><b/><sz val="11"/><name val="Arial"/></font></fonts>' +
       '<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
       '<fill><patternFill patternType="solid"><fgColor rgb="FF0F766E"/></patternFill></fill>' +
       '<fill><patternFill patternType="solid"><fgColor rgb="FFE3F1EF"/></patternFill></fill>' +
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFFDE7D6"/></patternFill></fill></fills>' +
-      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFFDE7D6"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFD3D3D3"/></patternFill></fill></fills>' +
+      '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' +
+      '<border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders>' +
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-      '<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+      '<cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
       '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
       '<xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
-      '<xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/></cellXfs>' +
+      '<xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/>' +
+      // 4 Arial, 5 Arial date, 6 DSR header, 7 DSR cell centred, 8 DSR cell left
+      '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+      '<xf numFmtId="164" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="left"/></xf>' +
+      '<xf numFmtId="0" fontId="4" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+      '<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+      '<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs>' +
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
     var files = [
       { name: '[Content_Types].xml', data: utf8(ct) }, { name: '_rels/.rels', data: utf8(rels) },
@@ -101,6 +115,10 @@
     for (var i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     return btoa(s);
   }
-  var api = { build: build, toBase64: toBase64 };
+    function excelDate(iso) { // 'YYYY-MM-DD' -> Excel serial
+    var p = iso.split('-');
+    return Math.round((Date.UTC(+p[0], +p[1] - 1, +p[2]) - Date.UTC(1899, 11, 30)) / 86400000);
+  }
+  var api = { build: build, toBase64: toBase64, excelDate: excelDate };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.XLSX = api;
 })(typeof self !== 'undefined' ? self : this);
