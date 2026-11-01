@@ -31,6 +31,13 @@
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
   }
+  function saveXlsx(name, sheets) {
+    var bytes = XLSX.build(sheets);
+    if (Bridge && Bridge.saveBase64) { toast(Bridge.saveBase64(name, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', XLSX.toBase64(bytes))); return; }
+    var blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var el = document.createElement('a'); el.href = URL.createObjectURL(blob); el.download = name;
+    document.body.appendChild(el); el.click(); el.remove();
+  }
   function uid() { return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function seedAccounts() {
     return (window.SEED_ACCOUNTS || []).map(function (a) { return Object.assign({ tier: 'B', otc: false }, a); });
@@ -139,6 +146,7 @@
     F.otc.checked = !!a.otc;
     F.nearAsterClinic.checked = !!a.nearAsterClinic;
     F.disabled.checked = !!a.disabled;
+    F.forceInclude.checked = !!a.forceInclude;
     F.note.value = a.note || '';
     var loc = P.locate(a);
     $('#editInfo').textContent = i >= 0 ? (qualityText[loc.quality] + (a.address ? ' — ' + a.address : '')) : '';
@@ -168,6 +176,7 @@
     a.otc = F.otc.checked;
     a.nearAsterClinic = F.nearAsterClinic.checked;
     a.disabled = F.disabled.checked;
+    a.forceInclude = F.forceInclude.checked;
     a.note = F.note.value.trim() || undefined;
     var locText = F.loc.value.trim();
     if (locText) {
@@ -397,7 +406,7 @@
         return '<tr><td>' + esc(r.label) + '</td><td class="num">' + r.branches + '</td><td class="num">' + r.w1 + ' <span class="muted">(' + r.acc1 + ')</span></td><td class="num">' + r.w2 +
           ' <span class="muted">(' + r.acc2 + ')</span></td><td>' + (r.chain === 'Aster' ? '<span class="muted">تكملة</span>' : r.missing.length ? '<span class="reason">' + r.missing.length + '</span>' : '<span class="ok">✓</span>') + '</td></tr>';
       }).join('') + '</table><p class="muted small">الرقم بين القوسين = عدد الحسابات. ' + plan.excluded.length + ' مكان مستبعد حسب القواعد.</p>' +
-      '<div class="btns"><button id="btnCsv">📄 تصدير Excel/CSV</button><button id="btnShare">📤 شير الخطة</button></div></div>');
+      '<div class="btns"><button data-xlsx="1">📊 Excel الأسبوع 1</button><button data-xlsx="2">📊 Excel الأسبوع 2</button><button data-xlsx="0">📊 Excel الأسبوعين</button><button id="btnShare">📤 شير الخطة</button></div></div>');
 
     h.push('<div class="weeks"><button data-w="1" class="' + (shownWeek === 1 ? 'on' : '') + '">الأسبوع 1</button><button data-w="2" class="' + (shownWeek === 2 ? 'on' : '') + '">الأسبوع 2</button></div>');
 
@@ -424,7 +433,20 @@
     if (el) { e.preventDefault(); openUrl(el.dataset.url); return; }
     var wb = e.target.closest('[data-w]');
     if (wb) { shownWeek = +wb.dataset.w; renderPlan(); return; }
-    if (e.target.id === 'btnCsv') saveFile('خطة-الزيارات-' + plan.startDate + '.csv', 'text/csv', P.csv(plan));
+    var xb = e.target.closest('[data-xlsx]');
+    if (xb) {
+      var wk = +xb.dataset.xlsx;
+      var sh = P.sheetRows(plan, wk);
+      var sheets = [{ name: wk ? 'الأسبوع ' + wk : 'الخطة', rows: sh.rows, styles: sh.styles, widths: sh.widths }];
+      var cov = [['السلسلة', 'عدد الفروع', 'زيارات أسبوع 1', 'حسابات أسبوع 1', 'زيارات أسبوع 2', 'حسابات أسبوع 2', 'مالحقش']].concat(plan.coverage.map(function (r) {
+        return [r.label, r.branches, r.w1, r.acc1, r.w2, r.acc2, r.chain === 'Aster' ? 'تكملة' : r.missing.join('، ')];
+      }));
+      sheets.push({ name: 'التغطية', rows: cov, widths: [14, 11, 13, 13, 13, 13, 60] });
+      if (plan.warnings.length) sheets.push({ name: 'تنبيهات', rows: [['تنبيه']].concat(plan.warnings.map(function (w) { return [w]; })), widths: [120] });
+      var first = plan.days.filter(function (d) { return !wk || d.week === wk; })[0];
+      saveXlsx('خطة-الزيارات-' + (wk ? 'أسبوع' + wk + '-' : '') + first.date + '.xlsx', sheets);
+      return;
+    }
     if (e.target.id === 'btnShare') {
       var txt = plan.days.map(function (d) {
         return '*' + d.name + ' ' + d.date + ' (أسبوع ' + d.week + ') — ' + d.total + ' حساب*\n' +

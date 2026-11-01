@@ -209,8 +209,16 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String saveBase64(String name, String mime, String base64) {
+            return saveBytes(name, mime, android.util.Base64.decode(base64, android.util.Base64.DEFAULT));
+        }
+
+        @JavascriptInterface
         public String saveFile(String name, String mime, String content) {
-            byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+            return saveBytes(name, mime, content.getBytes(StandardCharsets.UTF_8));
+        }
+
+        private String saveBytes(String name, String mime, byte[] bytes) {
             try {
                 if (Build.VERSION.SDK_INT >= 29) {
                     ContentValues v = new ContentValues();

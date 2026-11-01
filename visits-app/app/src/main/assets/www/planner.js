@@ -234,6 +234,7 @@
   function exclusionReason(a, ctx) {
     if (a.disabled) return 'متوقّف يدويًا';
     if (!CHAINS[a.chain]) return 'السلسلة مش محددة';
+    if (a.forceInclude) return null;
     if (a.chain === 'PharmC') return 'Pharm C مستبعدة (بدالها ميدون)';
     if (a.chain === 'Aster' && a.type === 'clinic') return 'عيادات أستر مستبعدة';
     if (a.chain === 'Med7' && /nasri|nasry|نصري/.test(normalize(a.name + ' ' + (a.note || '')))) return 'فرع النصري مستبعد';
@@ -326,6 +327,50 @@
       for (var a = 0; a < g.length; a++) for (var b = a + 1; b < g.length; b++) m = Math.max(m, dist(g[a].p, g[b].p));
       return m;
     };
+    if (hh.length <= 12) {
+      // Split every branch into 4 groups of 3 (re-using branches only if there are fewer than 12),
+      // minimising the widest group first, then the total spread.
+      var bestP = null;
+      (function part(left, acc) {
+        if (acc.length === 4 || !left.length) {
+          if (acc.length < 4 && left.length) return;
+          var full = acc.slice();
+          var spans = full.map(span);
+          var mx = Math.max.apply(null, spans), tot = spans.reduce(function (x, y) { return x + y; }, 0);
+          if (bestP && mx > bestP.mx + 1e-9) return;
+          while (full.length < 4) full.push(null);
+          if (!bestP || mx < bestP.mx - 1e-9 || tot < bestP.tot) bestP = { g: full, mx: mx, tot: tot };
+          return;
+        }
+        var first = left[0], rest = left.slice(1);
+        var need = 2;
+        if (rest.length < need) {
+          // top up from the nearest already-grouped branches
+          var others = hh.filter(function (x) { return left.indexOf(x) < 0; })
+            .sort(function (x, y) { return dist(first.p, x.p) - dist(first.p, y.p); });
+          var g0 = left.concat(others.slice(0, 3 - left.length));
+          if (bestP && span(g0) > bestP.mx + 1e-9) return;
+          part([], acc.concat([g0]));
+          return;
+        }
+        for (var i2 = 0; i2 < rest.length; i2++) for (var j2 = i2 + 1; j2 < rest.length; j2++) {
+          var g1 = [first, rest[i2], rest[j2]];
+          if (bestP && span(g1) > bestP.mx + 1e-9) continue;
+          part(rest.filter(function (x, k3) { return k3 !== i2 && k3 !== j2; }), acc.concat([g1]));
+        }
+      })(hh.slice(), []);
+      var gs = bestP.g.filter(Boolean);
+      // fewer than 4 groups (fewer than 10 branches): repeat the tightest groups
+      var byTight = gs.slice().sort(function (x, y) { return span(x) - span(y); });
+      while (gs.length < 4) gs.push(byTight[(gs.length) % byTight.length]);
+      // spread east/west: alternate so each week gets two different groups
+      var order = gs.slice().sort(function (x, y) { return centroid(x.map(function (q) { return q.p; })).lng - centroid(y.map(function (q) { return q.p; })).lng; });
+      groups = [order[0], order[2], order[1], order[3]];
+      var wide = groups.filter(function (g) { return span(g) > maxSpan; });
+      if (wide.length) warnings.push('عشان نغطي كل فروع HealthHub الـ' + hh.length + '، فيه يوم HealthHub فروعه بعيدة شوية عن بعض (لحد ' + Math.round(bestP.mx) + ' كم): ' +
+        wide.map(function (g) { return g.map(function (x) { return x.a.name.replace(/HealthHub (Clinic|Day Surgery) - /, ''); }).join(' + '); }).join(' | '));
+      return groups;
+    }
     var triples = [];
     for (var i = 0; i < hh.length; i++) for (var j = i + 1; j < hh.length; j++) for (var k = j + 1; k < hh.length; k++) {
       var t = [hh[i], hh[j], hh[k]];
@@ -447,7 +492,7 @@
       var free = wd.filter(function (dd) { return !dd.anchor; });
       var need = function () {
         return nahdi.filter(function (x) { return !placed[x.a.id]; }).map(function (x) { return { x: x, v: 10 }; })
-          .concat(once.filter(function (x) { return !onceDone[x.a.id]; }).map(function (x) { return { x: x, v: wk === 2 ? 6 : 3 }; }));
+          .concat(once.filter(function (x) { return !onceDone[x.a.id]; }).map(function (x) { return { x: x, v: (x.a.chain === 'Medon' ? 5 : 4) * (wk === 2 ? 2 : 1) }; }));
       };
       // Anchored days take the nearby must-visit accounts first.
       function fillDay(dd, list) {
@@ -506,14 +551,14 @@
       });
     });
     // Medon / Med7 still not visited: the day (any week) whose stops are closest, if there is room.
-    once.forEach(function (x) {
+    once.slice().sort(function (a, b) { return (a.a.chain === 'Medon' ? 0 : 1) - (b.a.chain === 'Medon' ? 0 : 1) || b.pr - a.pr; }).forEach(function (x) {
       if (onceDone[x.a.id]) return;
       var cands = days.filter(function (dd) { return dd.load + x.w <= dd.cap; })
         .sort(function (a, b) { return coreDist(x, a) - coreDist(x, b); });
       if (!cands.length) { warnings.push('"' + x.a.name + '" ماتحطّش — الأيام مليانة.'); return; }
       var dd = cands[0];
-      if (coreDist(x, dd) > R * 1.5) {
-        warnings.push('"' + x.a.name + '" (' + displayArea(x.a, x.p) + ') بعيد عن مناطق الأسبوعين — سيبته للدورة الجاية.');
+      if (coreDist(x, dd) > R) {
+        warnings.push('"' + x.a.name + '" (' + displayArea(x.a, x.p) + ') بعيد عن مناطق الأسبوعين — حطّيت أستر قريبة بداله، وسيبته للدورة الجاية.');
         return;
       }
       dd.items.push({ x: x, extra: false }); dd.load += x.w; onceDone[x.a.id] = 1;
@@ -640,6 +685,24 @@
     return '﻿' + lines.join('\r\n');
   }
 
+  // Rows for an Excel export: week = 1, 2 or 0 (both).
+  function sheetRows(plan, week) {
+    var rows = [['Week', 'Day', 'Date', 'Order', 'Account name', 'Chain', 'Type', 'Accounts count', 'Area', 'Time slot', 'Google Maps link', 'ملاحظة']];
+    var styles = [1];
+    plan.days.forEach(function (d) {
+      if (week && d.week !== week) return;
+      d.stops.forEach(function (s, i) {
+        rows.push([d.week, d.name, d.date, i + 1, s.name, s.chainLabel, s.typeLabel, s.weight, s.area,
+          s.kind === 'hh' ? s.slot + ' (1-3 PM)' : s.slot, s.url,
+          [s.extra ? 'زيارة إضافية' : '', s.quality !== 'exact' ? 'مكان تقريبي' : ''].filter(Boolean).join('، ')]);
+        styles.push(s.kind === 'hh' ? 3 : 0);
+      });
+      rows.push([d.week, d.name, d.date, '', 'الإجمالي اليومي', '', '', d.total, '', '', '', '']);
+      styles.push(2);
+    });
+    return { rows: rows, styles: styles, widths: [7, 10, 12, 7, 50, 11, 17, 9, 20, 16, 40, 24] };
+  }
+
   // Google Maps directions links for a day (max 10 points per link).
   function routeLinks(day) {
     var pts = day.stops.map(function (s) {
@@ -663,6 +726,6 @@
     normalize: normalize, detectArea: detectArea, detectChain: detectChain, detectType: detectType,
     parseCoords: parseCoords, insideDubai: insideDubai, locate: locate, weightOf: weightOf,
     exclusionReason: exclusionReason, generate: generate, validate: validate, csv: csv,
-    routeLinks: routeLinks, areaLabel: areaLabel, displayArea: displayArea, typeLabel: typeLabel, dist: dist
+    routeLinks: routeLinks, sheetRows: sheetRows, areaLabel: areaLabel, displayArea: displayArea, typeLabel: typeLabel, dist: dist
   };
 });
