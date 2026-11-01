@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>خطة الزيارات</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>خطة الزيارات</h1>
+  <span id="topInfo" class="muted"></span>
+</header>
+
+<main>
+  <!-- PLAN -->
+  <section id="tab-plan" class="tab active">
+    <div class="card">
+      <div class="row">
+        <label class="grow">أول يوم (اثنين)
+          <input type="date" id="startDate">
+        </label>
+        <label class="grow">نقطة البداية (اختياري)
+          <input id="homeArea" list="areaList" placeholder="مثلاً: Al Nahda">
+        </label>
+      </div>
+      <button id="btnGenerate" class="primary block">اعمل خطة الأسبوعين</button>
+    </div>
+    <div id="planOut"></div>
+  </section>
+
+  <!-- ACCOUNTS -->
+  <section id="tab-accounts" class="tab">
+    <div class="card">
+      <div id="chainStats" class="chips"></div>
+      <div id="locStatus" class="muted small"></div>
+      <div class="btns">
+        <button id="btnResolve" class="primary">📍 حدّد المواقع</button>
+        <button id="btnAdd">＋ إضافة</button>
+        <button id="btnImport">⬇️ استيراد</button>
+      </div>
+    </div>
+    <div class="card filters">
+      <input id="search" type="search" placeholder="دوّر بالاسم أو المنطقة…">
+      <select id="chainFilter">
+        <option value="">كل السلاسل</option>
+      </select>
+      <select id="stateFilter">
+        <option value="">الكل</option>
+        <option value="in">داخل الخطة</option>
+        <option value="out">مستبعد</option>
+        <option value="weak">مكانه تقريبي</option>
+      </select>
+    </div>
+    <div id="accList"></div>
+  </section>
+
+  <!-- MORE -->
+  <section id="tab-more" class="tab">
+    <div class="card">
+      <h2>القواعد المستخدمة</h2>
+      <ul class="rules">
+        <li>دبي بس — مفيش شارقة ولا عجمان.</li>
+        <li>الاثنين للجمعة، 17 حساب في اليوم، أسبوعين.</li>
+        <li>كل فرع نهدي لازم يتزار كل أسبوع.</li>
+        <li>كل فروع ميدون و Med7 تتزار مرة على الأقل (ما عدا Med7 النصري).</li>
+        <li>HealthHub = 3 حسابات (صيدلية + 2 دكتور)، الخميس والجمعة بس من 1 لـ 3 — 3 فروع قريبين من بعض كل يوم = 9 حسابات.</li>
+        <li>عيادة Med7 = حسابين.</li>
+        <li>أستر صيدليات للتكملة بس. مستبعد: عيادات أستر، صيدلية أستر جنب عيادة أستر، كل Pharm C.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>البيانات</h2>
+      <div class="btns">
+        <button id="btnBackup">💾 نسخة احتياطية</button>
+        <button id="btnRestore">♻️ استرجاع نسخة</button>
+        <button id="btnReseed" class="danger">↺ رجّع قوايمي الأصلية</button>
+      </div>
+      <p class="muted small">البيانات محفوظة على الموبايل بس. اعمل نسخة احتياطية قبل ما تمسح التطبيق.</p>
+    </div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button data-tab="plan" class="active"><span>🗓️</span>الخطة</button>
+  <button data-tab="accounts"><span>🏥</span>الحسابات</button>
+  <button data-tab="more"><span>⚙️</span>المزيد</button>
+</nav>
+
+<!-- Edit dialog -->
+<dialog id="dlgEdit">
+  <form method="dialog" id="formEdit">
+    <h2 id="editTitle">حساب</h2>
+    <label>الاسم <input name="name" required></label>
+    <div class="row">
+      <label class="grow">السلسلة
+        <select name="chain" id="editChain"></select>
+      </label>
+      <label class="grow" id="typeWrap">النوع
+        <select name="type">
+          <option value="pharmacy">صيدلية</option>
+          <option value="clinic">عيادة</option>
+        </select>
+      </label>
+    </div>
+    <label>المنطقة <input name="area" list="areaList" placeholder="تتحدد تلقائي من الاسم"></label>
+    <label>لينك جوجل ماب أو إحداثيات (lat,lng)
+      <input name="loc" dir="ltr" placeholder="25.2048, 55.2708">
+    </label>
+    <div class="row">
+      <label class="grow">الأهمية
+        <select name="tier">
+          <option value="A">A — عالي</option>
+          <option value="B">B — متوسط</option>
+          <option value="C">C — قليل</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="otc"> OTC قوي</label>
+    </div>
+    <label class="check" id="nearWrap"><input type="checkbox" name="nearAsterClinic"> جنب عيادة أستر (استبعد)</label>
+    <label class="check"><input type="checkbox" name="disabled"> وقّفه (مايدخلش الخطة)</label>
+    <label>ملاحظات <input name="note"></label>
+    <p id="editInfo" class="muted small"></p>
+    <div class="btns">
+      <button value="save" class="primary">حفظ</button>
+      <button value="map" type="button" id="btnEditMap">افتح على الخريطة</button>
+      <button value="delete" type="button" id="btnDelete" class="danger">مسح</button>
+      <button value="cancel" formnovalidate>إلغاء</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Import dialog -->
+<dialog id="dlgImport">
+  <form method="dialog">
+    <h2>استيراد من Google Maps</h2>
+    <p class="muted small">ملفات Google Takeout (CSV للقوايم المحفوظة، JSON، أو KML) — أو الصق أسماء/لينكات سطر سطر.</p>
+    <input type="file" id="importFile" accept=".csv,.json,.geojson,.kml,.txt,text/*,application/json" multiple>
+    <textarea id="importText" rows="5" placeholder="Nahdi Pharmacy - Al Barsha, https://maps.google.com/..."></textarea>
+    <label>لو السلسلة مش باينة من الاسم
+      <select id="importChain"><option value="">حدّدها تلقائي</option></select>
+    </label>
+    <p id="importResult" class="small"></p>
+    <div class="btns">
+      <button type="button" id="btnDoImport" class="primary">استيراد</button>
+      <button value="cancel">قفل</button>
+    </div>
+  </form>
+</dialog>
+
+<input type="file" id="restoreFile" accept=".json,application/json" hidden>
+<datalist id="areaList"></datalist>
+<div id="toast"></div>
+
+<script src="seed.js"></script>
+<script src="planner.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

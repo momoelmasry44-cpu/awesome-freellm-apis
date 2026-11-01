@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- map pin with a cross -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M54,26c-11.6,0 -21,9.4 -21,21c0,15.8 21,35 21,35s21,-19.2 21,-35c0,-11.6 -9.4,-21 -21,-21z" />
+    <path android:fillColor="#0F766E"
+        android:pathData="M50,36h8v7h7v8h-7v7h-8v-7h-7v-8h7z" />
+</vector>
