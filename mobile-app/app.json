@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Free LLM APIs",
+    "slug": "free-llm-apis",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "net.freellm.apis"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0E1117",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "net.freellm.apis"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "backgroundColor": "#0E1117"
+  }
+}
