@@ -1,0 +1,58 @@
+name: Build Free VPN (Android APK)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "free-vpn-android/**"
+      - ".github/workflows/build-free-vpn-apk.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: free-vpn-android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Bundle the free server list into the app
+        run: tool/fetch_servers.sh assets/servers.csv
+      - name: Also publish the list for in-app updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view vpn-servers >/dev/null 2>&1 || \
+            gh release create vpn-servers --prerelease --target "$GITHUB_SHA" \
+              --title "Free VPN server list (auto-updated)" \
+              --notes "قائمة السيرفرات المجانية، بتتحدث تلقائيًا كل 3 ساعات. التطبيق بيستخدمها تلقائيًا."
+          cp assets/servers.csv /tmp/servers.csv
+          gh release upload vpn-servers /tmp/servers.csv --clobber
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      - run: flutter build apk --release
+      - run: cp build/app/outputs/flutter-apk/app-release.apk FreeVPN.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FreeVPN-android
+          path: free-vpn-android/FreeVPN.apk
+      - name: Publish to Releases (easy download from the phone)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: free-vpn-apk-${{ github.run_number }}
+          name: Free VPN APK (build ${{ github.run_number }})
+          make_latest: true
+          body: "حمّل ملف FreeVPN.apk وثبّته على موبايلك الأندرويد."
+          files: free-vpn-android/FreeVPN.apk
+          target_commitish: ${{ github.sha }}

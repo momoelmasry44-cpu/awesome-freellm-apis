@@ -1,0 +1,23 @@
+name: Build Free VPN (Windows exe)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "free-vpn-app/**"
+      - ".github/workflows/build-free-vpn.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyinstaller
+      - run: pyinstaller --onefile --windowed --uac-admin --name FreeVPN free-vpn-app/free_vpn.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FreeVPN-windows
+          path: dist/FreeVPN.exe
