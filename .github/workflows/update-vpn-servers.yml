@@ -1,0 +1,27 @@
+name: Update free VPN servers
+
+# Keeps a fresh copy of the free VPN Gate server list on GitHub, so the app
+# can download it even where vpngate.net is blocked or slow.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */3 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: free-vpn-android/tool/fetch_servers.sh servers.csv
+      - name: Upload to the vpn-servers release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view vpn-servers >/dev/null 2>&1 || \
+            gh release create vpn-servers --prerelease --target "$GITHUB_SHA" \
+              --title "Free VPN server list (auto-updated)" \
+              --notes "قائمة السيرفرات المجانية، بتتحدث تلقائيًا كل 3 ساعات. التطبيق بيستخدمها تلقائيًا."
+          gh release upload vpn-servers servers.csv --clobber

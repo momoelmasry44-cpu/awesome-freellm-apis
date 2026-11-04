@@ -50,7 +50,7 @@ class _HomePageState extends State<HomePage> {
   late final OpenVPN _vpn;
   List<VpnServer> _servers = [];
   bool _loading = true;
-  bool _fromCache = false;
+  String? _source;
   String? _loadError;
 
   String? _country; // null = best server automatically
@@ -94,7 +94,7 @@ class _HomePageState extends State<HomePage> {
       final r = await loadServers();
       setState(() {
         _servers = r.servers;
-        _fromCache = r.fromCache;
+        _source = r.source;
       });
     } catch (e) {
       setState(() => _loadError = e.toString());
@@ -405,7 +405,7 @@ class _HomePageState extends State<HomePage> {
                         : _loadError != null
                             ? 'فشل التحميل، اسحب لتحت للتحديث'
                             : '${_servers.length} سيرفر متاح'
-                                '${_fromCache ? ' (نسخة محفوظة)' : ''}',
+                                '${_source != null ? ' ($_source)' : ''}',
                     style: const TextStyle(color: _muted),
                   ),
                   trailing: const Icon(Icons.chevron_left),

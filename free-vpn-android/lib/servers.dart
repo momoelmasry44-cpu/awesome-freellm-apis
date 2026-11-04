@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -125,38 +126,46 @@ List<VpnServer> parseVpnGateCsv(String text) {
   return servers;
 }
 
+// Where the server list comes from, in order:
+//  1. GitHub copy, refreshed every few hours by .github/workflows/update-vpn-servers.yml
+//     (GitHub is reachable almost everywhere, even where vpngate.net is blocked)
+//  2. The official VPN Gate API
+//  3. The last list this phone downloaded
+//  4. The list built into the APK (assets/servers.csv)
 const _apiUrls = [
+  'https://github.com/momoelmasry44-cpu/awesome-freellm-apis/releases/download/vpn-servers/servers.csv',
   'https://www.vpngate.net/api/iphone/',
   'http://www.vpngate.net/api/iphone/',
 ];
 const _cacheKey = 'servers_cache_v1';
+const _bundledAsset = 'assets/servers.csv';
 
 class ServerResult {
   final List<VpnServer> servers;
-  final bool fromCache;
-  ServerResult(this.servers, this.fromCache);
+
+  /// null = fresh from the internet, otherwise where the list came from.
+  final String? source;
+  ServerResult(this.servers, this.source);
+  bool get fromCache => source != null;
 }
 
 Future<ServerResult> loadServers() async {
   final prefs = await SharedPreferences.getInstance();
-  Object? lastError;
   for (final url in _apiUrls) {
     try {
       final res = await http
           .get(Uri.parse(url), headers: {'User-Agent': 'FreeVPN/1.0'})
-          .timeout(const Duration(seconds: 25));
-      if (res.statusCode != 200) {
-        lastError = 'HTTP ${res.statusCode}';
-        continue;
-      }
-      final servers = await compute(parseVpnGateCsv, utf8.decode(res.bodyBytes, allowMalformed: true));
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) continue;
+      final servers = await compute(
+          parseVpnGateCsv, utf8.decode(res.bodyBytes, allowMalformed: true));
       if (servers.isNotEmpty) {
         await prefs.setString(
             _cacheKey, jsonEncode(servers.map((s) => s.toJson()).toList()));
-        return ServerResult(servers, false);
+        return ServerResult(servers, null);
       }
-    } catch (e) {
-      lastError = e;
+    } catch (_) {
+      // try the next source
     }
   }
   final cached = prefs.getString(_cacheKey);
@@ -164,7 +173,10 @@ Future<ServerResult> loadServers() async {
     final list = (jsonDecode(cached) as List)
         .map((e) => VpnServer.fromJson(e as Map<String, dynamic>))
         .toList();
-    return ServerResult(list, true);
+    if (list.isNotEmpty) return ServerResult(list, 'نسخة محفوظة');
   }
-  throw Exception('تعذر تحميل السيرفرات: $lastError');
+  final bundled = await rootBundle.loadString(_bundledAsset);
+  final list = await compute(parseVpnGateCsv, bundled);
+  if (list.isEmpty) throw Exception('تعذر تحميل السيرفرات، تأكد من الإنترنت');
+  return ServerResult(list, 'سيرفرات مدمجة');
 }

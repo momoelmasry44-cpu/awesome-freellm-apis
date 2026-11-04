@@ -26,6 +26,18 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Bundle the free server list into the app
+        run: tool/fetch_servers.sh assets/servers.csv
+      - name: Also publish the list for in-app updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view vpn-servers >/dev/null 2>&1 || \
+            gh release create vpn-servers --prerelease --target "$GITHUB_SHA" \
+              --title "Free VPN server list (auto-updated)" \
+              --notes "قائمة السيرفرات المجانية، بتتحدث تلقائيًا كل 3 ساعات. التطبيق بيستخدمها تلقائيًا."
+          cp assets/servers.csv /tmp/servers.csv
+          gh release upload vpn-servers /tmp/servers.csv --clobber
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
@@ -40,6 +52,7 @@ jobs:
         with:
           tag_name: free-vpn-apk-${{ github.run_number }}
           name: Free VPN APK (build ${{ github.run_number }})
+          make_latest: true
           body: "حمّل ملف FreeVPN.apk وثبّته على موبايلك الأندرويد."
           files: free-vpn-android/FreeVPN.apk
           target_commitish: ${{ github.sha }}
